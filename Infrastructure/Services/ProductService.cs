@@ -1,104 +1,127 @@
 using System.Net;
 using AutoMapper;
-using Domain.DTOs;
-using Domain.Dtos.Product;
 using Domain.Entities;
 using Domain.Filters;
 using Domain.Responses;
 using Infrastructure.Interfaces;
+using Domain.Dtos.Product;
 
 namespace Infrastructure.Services;
 
-public class ProductService(IBaseRepository<Product, int> repository, IMapper mapper) : IProductService
+public class ProductService(IBaseRepository<Product, int> repository,IMemoryCacheService memoryCacheService, IMapper mapper) : IProductService
 {
     public async Task<Response<GetProductDto>> CreateAsync(CreateProductDto input)
     {
-        var product = mapper.Map<Product>(input);
+        var Product = mapper.Map<Product>(input);
 
-        var result = await repository.AddAsync(product);
+        var result = await repository.AddAsync(Product);
 
-        var data = mapper.Map<GetProductDto>(product);
-
-        return result == 0
-            ? new Response<GetProductDto>(HttpStatusCode.BadRequest, "Product no added")
-            : mapper.Map<Response<GetProductDto>>(data);
+        if (result == 0)
+        {
+            return new Response<GetProductDto>(HttpStatusCode.InternalServerError, "Failed");
+        }
+        await memoryCacheService.DeleteData("Products"); 
+        var data = mapper.Map<GetProductDto>(Product);
+        return new Response<GetProductDto>(data);
     }
 
     public async Task<Response<string>> DeleteAsync(int id)
     {
-        var product = await repository.GetByIdAsync(id);
-        if (product == null)
+        var Product = await repository.GetByIdAsync(id);
+        if (Product == null)
         {
             return new Response<string>(HttpStatusCode.BadRequest, "Not found");
         }
 
-        await repository.DeleteAsync(product);
+        await repository.DeleteAsync(Product);
+        await memoryCacheService.DeleteData("Products");
 
         return new Response<string>(HttpStatusCode.BadRequest, "Product deleted");
     }
 
     public async Task<Response<List<GetProductDto>>> GetAllAsync(ProductFilter filter)
     {
+        const string cacheKey = "categories";
         var validFilter = new ValidFilter(filter.PagesNumber, filter.PageSize);
-        var product = await repository.GetAll();
+        var ProductsInCache = await memoryCacheService.GetData<List<GetProductDto>>(cacheKey);
 
-        if (filter.Description != null)
+        if (ProductsInCache == null)
         {
-            product = product.Where(o => o.Description.Contains(filter.Description));
+            var Product = await repository.GetAll();
+            ProductsInCache = Product.Select(c => new GetProductDto
+            {
+                Id = c.Id,
+                Name = c.Name,
+                Description = c.Description,
+                Price = c.Price,
+                CategoryId = c.CategoryId,
+                UserId = c.UserId,
+                IsTop = c.IsTop,
+                IsPremium = c.IsPremium,
+                PremiumOrTopExpiryDate = c.PremiumOrTopExpiryDate
+            }).ToList();
+
+            await memoryCacheService.SetData(cacheKey, ProductsInCache, 1);
         }
 
-        if (filter.Name != null)
+        if (filter.UserId != null)
         {
-            product = product.Where(s => s.Name.Contains(filter.Name));
+            ProductsInCache = (List<GetProductDto>)ProductsInCache.Where(s => s.UserId >= filter.UserId);
         }
 
-        var mapped = mapper.Map<List<GetProductDto>>(product);
+        var mapped = mapper.Map<List<GetProductDto>>(ProductsInCache);
 
         var totalRecords = mapped.Count;
 
         var data = mapped.Skip((validFilter.PageNumber - 1) * validFilter.PageSize)
             .Take(validFilter.PageSize).ToList();
 
-        return new PagedResponse<List<GetProductDto>>(data, validFilter.PageNumber, validFilter.PageSize,
-            totalRecords);
+        return new PagedResponse<List<GetProductDto>>(data, validFilter.PageNumber, validFilter.PageSize, totalRecords);
     }
 
     public async Task<Response<GetProductDto>> GetByIdAsync(int id)
     {
-        var product = await repository.GetByIdAsync(id);
+        var Product = await repository.GetByIdAsync(id);
 
-        if (product == null)
+        if (Product == null)
         {
             return new Response<GetProductDto>(HttpStatusCode.BadRequest, "Not found");
         }
 
-        var data = mapper.Map<GetProductDto>(product);
+        var data = mapper.Map<GetProductDto>(Product);
 
         return new Response<GetProductDto>(data);
     }
 
     public async Task<Response<GetProductDto>> UpdateAsync(int id, UpdateProductDto input)
     {
-        var product = await repository.GetByIdAsync(id);
+        var Product = await repository.GetByIdAsync(id);
 
-        if (product == null)
+        if (Product == null)
         {
             return new Response<GetProductDto>(HttpStatusCode.BadRequest, "Not found");
         }
 
-        product.Name = input.Name;
-        product.Description = input.Description;
-        product.IsPremium = input.IsPremium;
-        product.Price = input.Price;
-        product.CategoryId= input.CategoryId;
-        product.UserId = input.UserId;
-        product.IsTop = input.IsTop;
 
-        var result = await repository.UpdateAsync(product);
-        var data = mapper.Map<GetProductDto>(product);
+        Product.Name = input.Name;
+        Product.Description = input.Description;
+        Product.Price = input.Price;
+        Product.CategoryId = input.CategoryId;
+        Product.UserId = input.UserId;
+        Product.IsTop = input.IsTop;
+        Product.IsPremium = input.IsPremium;
+        Product.PremiumOrTopExpiryDate = input.PremiumOrTopExpiryDate;
 
-        return result == 0
-            ? new Response<GetProductDto>(HttpStatusCode.BadRequest, "Not to update")
-            : new Response<GetProductDto>(data);
+        var result = await repository.UpdateAsync(Product);
+        var data = mapper.Map<GetProductDto>(Product);
+
+        if (result == 0)
+        {
+            return new Response<GetProductDto>(HttpStatusCode.BadRequest, "Not to update");
+        }
+
+        await memoryCacheService.DeleteData("Products");
+
+        return new Response<GetProductDto>(data);
     }
 }

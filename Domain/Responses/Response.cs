@@ -9,7 +9,7 @@ public class Response<T>
     public int StatusCode { get; set; }
     public string? Message { get; set; }
 
-    public Response()
+    public Response(Dtos.Order.GetOrderDto data)
     {
         
     }

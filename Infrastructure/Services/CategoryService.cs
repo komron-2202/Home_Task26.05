@@ -1,6 +1,4 @@
-using System.Net;
-using AutoMapper;
-using Domain.DTOs;
+﻿using System.Net;
 using Domain.Dtos.Category;
 using Domain.Entities;
 using Domain.Filters;
@@ -9,92 +7,114 @@ using Infrastructure.Interfaces;
 
 namespace Infrastructure.Services;
 
-public class CategoryService(IBaseRepository<Category, int> repository, IMapper mapper) : ICategoryService
+public class CategoryService(
+    IBaseRepository<Category, int> categoryRepository,
+    IMemoryCacheService memoryCacheService) : ICategoryService
 {
-    public async Task<Response<GetCategoryDto>> CreateAsync(CreateCategoryDto input)
+    public async Task<PagedResponse<List<GetCategoryDto>>> GetAllAsync(CategoryFilter filter)
     {
-        var customer = mapper.Map<Category>(input);
+        const string cacheKey = "categories";
 
-        var result = await repository.AddAsync(customer);
+        var categoriesInCache = await memoryCacheService.GetData<List<GetCategoryDto>>(cacheKey);
 
-        var data = mapper.Map<GetCategoryDto>(customer);
+        if (categoriesInCache == null)
+        {
+            var categories = await categoryRepository.GetAll();
+            categoriesInCache = categories.Select(c => new GetCategoryDto
+            {
+                Id = c.Id,
+                Name = c.Name,
+                Description = c.Description
+            }).ToList();
 
-        return result == 0
-            ? new Response<GetCategoryDto>(HttpStatusCode.BadRequest, "Category no added")
-            : mapper.Map<Response<GetCategoryDto>>(data);
+            await memoryCacheService.SetData(cacheKey, categoriesInCache, 1);
+        }
+
+        if (!string.IsNullOrEmpty(filter.Name))
+        {
+            categoriesInCache = categoriesInCache.Where(c => c.Name.ToLower().Trim().Contains(filter.Name.ToLower().Trim())).ToList();
+        }
+
+        var totalRecords = categoriesInCache.Count;
+
+        var paginatedData = categoriesInCache
+            .Skip((filter.PagesNumber - 1) * filter.PageSize)
+            .Take(filter.PageSize)
+            .ToList();
+        return new PagedResponse<List<GetCategoryDto>>(paginatedData, totalRecords, filter.PagesNumber,
+            filter.PageSize);
+    }
+
+    public async Task<Response<string>> CreateAsync(CreateCategoryDto request)
+    {
+        var category = new Category()
+        {
+            Name = request.Name,
+            Description = request.Description
+        };
+
+        var result = await categoryRepository.AddAsync(category);
+
+        if (result != 1) return new Response<string>(HttpStatusCode.InternalServerError, "Failed");
+
+        await memoryCacheService.DeleteData("categories"); 
+        // await redisCacheService.RemoveData("categories");
+        return new Response<string>("Success");
+    }
+
+    public async Task<Response<string>> UpdateAsync(int id, UpdateCategoryDto request)
+    {
+        var category = await categoryRepository.GetByIdAsync(id);
+
+        if (category == null)
+        {
+            return new Response<string>(HttpStatusCode.NotFound, "Category not found");
+        }
+
+        category.Name = request.Name;
+        category.Description = request.Description;
+
+        var result = await categoryRepository.UpdateAsync(category);
+
+        if (result != 1) return new Response<string>(HttpStatusCode.BadRequest, "Failed");
+
+        await memoryCacheService.DeleteData("categories"); 
+        return new Response<string>("Success");
     }
 
     public async Task<Response<string>> DeleteAsync(int id)
     {
-        var customer = await repository.GetByIdAsync(id);
-        if (customer == null)
+        var category = await categoryRepository.GetByIdAsync(id);
+        if (category == null)
         {
-            return new Response<string>(HttpStatusCode.BadRequest, "Not found");
+            return new Response<string>(HttpStatusCode.NotFound, "Category not found");
         }
 
-        await repository.DeleteAsync(customer);
+        var result = await categoryRepository.DeleteAsync(category);
 
-        return new Response<string>(HttpStatusCode.BadRequest, "Category deleted");
+        if (result != 1) return new Response<string>(HttpStatusCode.BadRequest, "Failed");
+
+        await memoryCacheService.DeleteData("categories");
+        return new Response<string>("Success");
     }
 
-    public async Task<Response<List<GetCategoryDto>>> GetAllAsync(CategoryFilter filter)
+    Task<Response<List<GetCategoryDto>>> ICategoryService.GetAllAsync(CategoryFilter filter)
     {
-        var validFilter = new ValidFilter(filter.PagesNumber, filter.PageSize);
-        var customer = await repository.GetAll();
-
-        if (filter.Description != null)
-        {
-            customer = customer.Where(o => o.Description.Contains(filter.Description));
-        }
-
-        if (filter.Name != null)
-        {
-            customer = customer.Where(s => s.Name.Contains(filter.Name));
-        }
-
-        var mapped = mapper.Map<List<GetCategoryDto>>(customer);
-
-        var totalRecords = mapped.Count;
-
-        var data = mapped.Skip((validFilter.PageNumber - 1) * validFilter.PageSize)
-            .Take(validFilter.PageSize).ToList();
-
-        return new PagedResponse<List<GetCategoryDto>>(data, validFilter.PageNumber, validFilter.PageSize,
-            totalRecords);
+        throw new NotImplementedException();
     }
 
-    public async Task<Response<GetCategoryDto>> GetByIdAsync(int id)
+    public Task<Response<GetCategoryDto>> GetByIdAsync(int id)
     {
-        var customer = await repository.GetByIdAsync(id);
-
-        if (customer == null)
-        {
-            return new Response<GetCategoryDto>(HttpStatusCode.BadRequest, "Not found");
-        }
-
-        var data = mapper.Map<GetCategoryDto>(customer);
-
-        return new Response<GetCategoryDto>(data);
+        throw new NotImplementedException();
     }
 
-    public async Task<Response<GetCategoryDto>> UpdateAsync(int id, UpdateCategoryDto input)
+    Task<Response<GetCategoryDto>> ICategoryService.UpdateAsync(int id, UpdateCategoryDto request)
     {
-        var customer = await repository.GetByIdAsync(id);
+        throw new NotImplementedException();
+    }
 
-        if (customer == null)
-        {
-            return new Response<GetCategoryDto>(HttpStatusCode.BadRequest, "Not found");
-        }
-
-        customer.Description = input.Description;
-        customer.Name = input.Name;
-
-
-        var result = await repository.UpdateAsync(customer);
-        var data = mapper.Map<GetCategoryDto>(customer);
-
-        return result == 0
-            ? new Response<GetCategoryDto>(HttpStatusCode.BadRequest, "Not to update")
-            : new Response<GetCategoryDto>(data);
+    Task<Response<GetCategoryDto>> ICategoryService.CreateAsync(CreateCategoryDto request)
+    {
+        throw new NotImplementedException();
     }
 }

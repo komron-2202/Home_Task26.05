@@ -798,11 +798,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\user\\Desktop\\hw26.05\\Domain\\Domain.csproj",
+      "projectUniqueName": "C:\\Users\\user\\Desktop\\.Net\\hw26.05\\Domain\\Domain.csproj",
       "projectName": "Domain",
-      "projectPath": "C:\\Users\\user\\Desktop\\hw26.05\\Domain\\Domain.csproj",
+      "projectPath": "C:\\Users\\user\\Desktop\\.Net\\hw26.05\\Domain\\Domain.csproj",
       "packagesPath": "C:\\Users\\user\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\user\\Desktop\\hw26.05\\Domain\\obj\\",
+      "outputPath": "C:\\Users\\user\\Desktop\\.Net\\hw26.05\\Domain\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"
