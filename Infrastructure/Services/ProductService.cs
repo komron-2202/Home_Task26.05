@@ -8,7 +8,7 @@ using Domain.Dtos.Product;
 
 namespace Infrastructure.Services;
 
-public class ProductService(IBaseRepository<Product, int> repository,IMemoryCacheService memoryCacheService, IMapper mapper) : IProductService
+public class ProductService(IBaseRepository<Product, int> repository,IMemoryCacheService memoryCacheService, IMapper mapper, IRedisCacheService redisCacheService) : IProductService
 {
     public async Task<Response<GetProductDto>> CreateAsync(CreateProductDto input)
     {
@@ -20,7 +20,8 @@ public class ProductService(IBaseRepository<Product, int> repository,IMemoryCach
         {
             return new Response<GetProductDto>(HttpStatusCode.InternalServerError, "Failed");
         }
-        await memoryCacheService.DeleteData("Products"); 
+        // await memoryCacheService.DeleteData("Products"); 
+        await redisCacheService.RemoveData("Products"); 
         var data = mapper.Map<GetProductDto>(Product);
         return new Response<GetProductDto>(data);
     }
@@ -34,7 +35,8 @@ public class ProductService(IBaseRepository<Product, int> repository,IMemoryCach
         }
 
         await repository.DeleteAsync(Product);
-        await memoryCacheService.DeleteData("Products");
+        // await memoryCacheService.DeleteData("Products");
+        await redisCacheService.RemoveData("Products");
 
         return new Response<string>(HttpStatusCode.BadRequest, "Product deleted");
     }
@@ -61,7 +63,7 @@ public class ProductService(IBaseRepository<Product, int> repository,IMemoryCach
                 PremiumOrTopExpiryDate = c.PremiumOrTopExpiryDate
             }).ToList();
 
-            await memoryCacheService.SetData(cacheKey, ProductsInCache, 1);
+            await redisCacheService.SetData(cacheKey, ProductsInCache, 1);
         }
 
         if (filter.UserId != null)
@@ -120,7 +122,8 @@ public class ProductService(IBaseRepository<Product, int> repository,IMemoryCach
             return new Response<GetProductDto>(HttpStatusCode.BadRequest, "Not to update");
         }
 
-        await memoryCacheService.DeleteData("Products");
+        // await memoryCacheService.DeleteData("Products");
+        await redisCacheService.RemoveData("Products");
 
         return new Response<GetProductDto>(data);
     }

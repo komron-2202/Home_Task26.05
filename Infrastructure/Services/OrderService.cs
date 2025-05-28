@@ -9,7 +9,7 @@ using Infrastructure.Interfaces;
 
 namespace Infrastructure.Services;
 
-public class OrderService(IBaseRepository<Order, int> repository,IMemoryCacheService memoryCacheService, IMapper mapper) : IOrderService
+public class OrderService(IBaseRepository<Order, int> repository,IMemoryCacheService memoryCacheService, IMapper mapper, IRedisCacheService redisCacheService) : IOrderService
 {
     public async Task<Response<GetOrderDto>> CreateAsync(CreateOrderDto input)
     {
@@ -21,7 +21,9 @@ public class OrderService(IBaseRepository<Order, int> repository,IMemoryCacheSer
         {
             return new Response<GetOrderDto>(HttpStatusCode.InternalServerError, "Failed");
         }
-        await memoryCacheService.DeleteData("orders"); 
+        // await memoryCacheService.DeleteData("orders"); 
+        await redisCacheService.RemoveData("orders");
+
         var data = mapper.Map<GetOrderDto>(order);
         return new Response<GetOrderDto>(data);
     }
@@ -35,7 +37,8 @@ public class OrderService(IBaseRepository<Order, int> repository,IMemoryCacheSer
         }
 
         await repository.DeleteAsync(order);
-        await memoryCacheService.DeleteData("orders");
+        // await memoryCacheService.DeleteData("orders");
+        await redisCacheService.RemoveData("orders");
 
         return new Response<string>(HttpStatusCode.BadRequest, "Order deleted");
     }
@@ -44,7 +47,8 @@ public class OrderService(IBaseRepository<Order, int> repository,IMemoryCacheSer
     {
         const string cacheKey = "categories";
         var validFilter = new ValidFilter(filter.PagesNumber, filter.PageSize);
-        var ordersInCache = await memoryCacheService.GetData<List<GetOrderDto>>(cacheKey);
+        // var ordersInCache = await memoryCacheService.GetData<List<GetOrderDto>>(cacheKey);
+        var ordersInCache = await redisCacheService.GetData<List<GetOrderDto>>(cacheKey);
 
         if (ordersInCache == null)
         {
@@ -140,7 +144,8 @@ public class OrderService(IBaseRepository<Order, int> repository,IMemoryCacheSer
             return new Response<GetOrderDto>(HttpStatusCode.BadRequest, "Not to update");
         }
 
-        await memoryCacheService.DeleteData("orders");
+        // await memoryCacheService.DeleteData("orders");
+        await redisCacheService.RemoveData("orders");
 
         return new Response<GetOrderDto>(data);
     }

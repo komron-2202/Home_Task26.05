@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using Domain.Dtos.Category;
 using Domain.Entities;
 using Domain.Filters;
@@ -9,14 +9,15 @@ namespace Infrastructure.Services;
 
 public class CategoryService(
     IBaseRepository<Category, int> categoryRepository,
-    IMemoryCacheService memoryCacheService) : ICategoryService
+    IMemoryCacheService memoryCacheService, IRedisCacheService redisCacheService) : ICategoryService
 {
     public async Task<PagedResponse<List<GetCategoryDto>>> GetAllAsync(CategoryFilter filter)
     {
         const string cacheKey = "categories";
 
-        var categoriesInCache = await memoryCacheService.GetData<List<GetCategoryDto>>(cacheKey);
-
+        // var categoriesInCache = await memoryCacheService.GetData<List<GetCategoryDto>>(cacheKey);
+        var categoriesInCache = await redisCacheService.GetData<List<GetCategoryDto>>(cacheKey);
+        
         if (categoriesInCache == null)
         {
             var categories = await categoryRepository.GetAll();
@@ -27,7 +28,7 @@ public class CategoryService(
                 Description = c.Description
             }).ToList();
 
-            await memoryCacheService.SetData(cacheKey, categoriesInCache, 1);
+            await redisCacheService.SetData(cacheKey, categoriesInCache, 1);
         }
 
         if (!string.IsNullOrEmpty(filter.Name))
@@ -57,8 +58,8 @@ public class CategoryService(
 
         if (result != 1) return new Response<string>(HttpStatusCode.InternalServerError, "Failed");
 
-        await memoryCacheService.DeleteData("categories"); 
-        // await redisCacheService.RemoveData("categories");
+        // await memoryCacheService.DeleteData("categories"); 
+        await redisCacheService.RemoveData("categories");
         return new Response<string>("Success");
     }
 
@@ -78,7 +79,8 @@ public class CategoryService(
 
         if (result != 1) return new Response<string>(HttpStatusCode.BadRequest, "Failed");
 
-        await memoryCacheService.DeleteData("categories"); 
+        // await memoryCacheService.DeleteData("categories"); 
+        await redisCacheService.RemoveData("categories");
         return new Response<string>("Success");
     }
 
@@ -94,7 +96,8 @@ public class CategoryService(
 
         if (result != 1) return new Response<string>(HttpStatusCode.BadRequest, "Failed");
 
-        await memoryCacheService.DeleteData("categories");
+        // await memoryCacheService.DeleteData("categories");
+        await redisCacheService.RemoveData("categories");
         return new Response<string>("Success");
     }
 
